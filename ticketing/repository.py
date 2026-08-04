@@ -64,6 +64,18 @@ class LedgerTally:
 
 
 @dataclass(frozen=True)
+class StatusChange:
+    """One movement of a petition's standing, as recorded in ticket_status."""
+
+    status_id: int
+    ticket_id: int
+    from_status: str | None
+    to_status: str
+    changed_by: str
+    changed_at: datetime
+
+
+@dataclass(frozen=True)
 class TicketMessage:
     message_id: int
     ticket_id: int
@@ -83,6 +95,13 @@ class TicketRepository:
         ticket_messages(message_id BIGINT IDENTITY PK, ticket_id BIGINT FK -> tickets
                         ON DELETE CASCADE, message_text TEXT, author VARCHAR(255),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+        ticket_status(status_id BIGINT IDENTITY PK, ticket_id BIGINT FK -> tickets
+                      ON DELETE CASCADE, from_status VARCHAR(50) NULL,
+                      to_status VARCHAR(50), changed_by VARCHAR(255),
+                      changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+
+    Both child tables cascade, so deleting a ticket takes its messages and its
+    status history with it in one statement.
 
     Both primary keys are GENERATED ALWAYS AS IDENTITY, so the database assigns
     them and the application must never supply a value. created_at is likewise
@@ -155,7 +174,19 @@ class TicketRepository:
                             """,
                             (title, description, status, priority, created_by),
                         )
-                        return Ticket(**cursor.fetchone())
+                        row = cursor.fetchone()
+                        # The opening entry: nothing before it, so from_status
+                        # is NULL. Same transaction as the INSERT, so a petition
+                        # can never exist without its first history row.
+                        cursor.execute(
+                            """
+                            INSERT INTO public.ticket_status
+                                (ticket_id, from_status, to_status, changed_by)
+                            VALUES (%s, NULL, %s, %s)
+                            """,
+                            (row["ticket_id"], status, created_by),
+                        )
+                        return Ticket(**row)
         except psycopg2.Error as error:
             raise _fail("Could not create the ticket in Lakebase.", error) from error
 
@@ -182,14 +213,31 @@ class TicketRepository:
         except psycopg2.Error as error:
             raise _fail("Could not add the message in Lakebase.", error) from error
 
-    def update_ticket(self, ticket_id: int, status: str, priority: str) -> Ticket:
-        """Set standing and urgency together, so one submission is one write."""
+    def update_ticket(
+        self, ticket_id: int, status: str, priority: str, changed_by: str
+    ) -> Ticket:
+        """Set standing and urgency, and record any movement of the standing.
+
+        The read, the write, and the history row share one transaction, and the
+        row is locked FOR UPDATE — so two simultaneous amendments cannot record
+        a movement that never happened.
+        """
         valid_status(status)
         valid_priority(priority)
         try:
             with self._pool.connection() as connection:
                 with connection:
                     with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT status FROM public.tickets "
+                            "WHERE ticket_id = %s FOR UPDATE",
+                            (ticket_id,),
+                        )
+                        current = cursor.fetchone()
+                        if current is None:
+                            raise TicketNotFoundError("This ticket no longer exists.")
+                        was = current["status"]
+
                         cursor.execute(
                             """
                             UPDATE public.tickets
@@ -202,12 +250,43 @@ class TicketRepository:
                         row = cursor.fetchone()
                         if row is None:
                             raise TicketNotFoundError("This ticket no longer exists.")
+
+                        # Only a real movement is worth recording; re-submitting
+                        # the same standing should not pad the history.
+                        if was != status:
+                            cursor.execute(
+                                """
+                                INSERT INTO public.ticket_status
+                                    (ticket_id, from_status, to_status, changed_by)
+                                VALUES (%s, %s, %s, %s)
+                                """,
+                                (ticket_id, was, status, changed_by),
+                            )
                         return Ticket(**row)
         except psycopg2.errors.CheckViolation as error:
             # chk_tickets_priority rejected the value.
             raise _fail(f"The ledger does not recognise the urgency '{priority}'.", error) from error
         except psycopg2.Error as error:
             raise _fail("Could not update the ticket in Lakebase.", error) from error
+
+    def list_status_changes(self, ticket_id: int) -> list[StatusChange]:
+        try:
+            with self._pool.connection() as connection:
+                with connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            """
+                            SELECT status_id, ticket_id, from_status, to_status,
+                                   changed_by, changed_at
+                            FROM public.ticket_status
+                            WHERE ticket_id = %s
+                            ORDER BY changed_at ASC, status_id ASC
+                            """,
+                            (ticket_id,),
+                        )
+                        return [StatusChange(**row) for row in cursor.fetchall()]
+        except psycopg2.Error as error:
+            raise _fail("Could not load the passage of standing from Lakebase.", error) from error
 
     def tally(self) -> LedgerTally:
         """Count tickets by standing and urgency in one aggregate query."""

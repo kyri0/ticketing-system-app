@@ -1,0 +1,110 @@
+<article class="card" id="p{{ ticket.ticket_id }}">
+<h2>Petition {{ ticket.ticket_id }} · {{ ticket.title }}</h2>
+<dl class="facts">
+  <div><dt>Petitioner</dt><dd>{{ ticket.created_by }}</dd></div>
+  <div><dt>Entered</dt><dd>{{ ticket.created_at.strftime('%d %B %Y') }}</dd></div>
+  <div><dt>Urgency</dt><dd><span class="badge urgency--{{ ticket.priority }}">{{ urgency_label(ticket.priority) }}</span></dd></div>
+  <div><dt>Standing</dt><dd><span class="badge standing standing--{{ ticket.status }}">{{ standing_label(ticket.status) }}</span></dd></div>
+</dl>
+
+<p class="rule">The grievance</p>
+{% if ticket.description %}
+  <p class="grievance">{{ ticket.description }}</p>
+{% else %}
+  <p class="quiet">No grievance was set down when this petition was entered.</p>
+{% endif %}
+
+<p class="rule">The record</p>
+{% if not messages %}
+  <p class="quiet">Nothing has yet been set down against this petition.</p>
+{% else %}
+  {% for message in messages %}
+  <div class="entry{% if loop.first %} first{% endif %}">
+    <p class="who">{{ message.author }} · {{ message.created_at.strftime('%d %B %Y, %H:%M') }}</p>
+    <p class="say">{{ message.message_text }}</p>
+  </div>
+  {% endfor %}
+{% endif %}
+
+<p class="rule">The passage of standing</p>
+{% if not changes %}
+  <p class="quiet">No movement of standing has been recorded for this petition.</p>
+{% else %}
+  <ol class="passage">
+    {% for change in changes %}
+    <li>
+      <span class="when">{{ change.changed_at.strftime('%d %B %Y, %H:%M') }}</span>
+      {% if change.from_status %}
+        <span class="badge standing standing--{{ change.from_status }}">{{ standing_label(change.from_status) }}</span>
+        <span class="arrow" aria-hidden="true">→</span>
+      {% else %}
+        <span class="quiet">Entered as</span>
+      {% endif %}
+      <span class="badge standing standing--{{ change.to_status }}">{{ standing_label(change.to_status) }}</span>
+      <span class="hand">by {{ change.changed_by }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+{% endif %}
+
+<div class="instruments">
+  <section>
+    <p class="rule">Append to the record</p>
+    <form method="post" action="/petitions/{{ ticket.ticket_id }}/messages">
+      <input type="hidden" name="back" value="{{ back }}">
+      <div class="field">
+        <label for="author">Hand</label>
+        <input type="text" id="author" name="author" maxlength="255" required
+               placeholder="Gareth the Warden">
+      </div>
+      <div class="field">
+        <label for="message_text">Testimony</label>
+        <textarea id="message_text" name="message_text" maxlength="10000" required></textarea>
+      </div>
+      <button type="submit">Add testimony</button>
+    </form>
+  </section>
+
+  <section>
+    <p class="rule">Alter the petition</p>
+    {% if ticket.status not in statuses %}
+    <p class="alarm">Stored standing is “{{ ticket.status }}”, which the ledger does not keep. Amending below will overwrite it.</p>
+    {% endif %}
+    <form method="post" action="/petitions/{{ ticket.ticket_id }}">
+      <input type="hidden" name="back" value="{{ back }}">
+      <div class="field">
+        <label for="hand">Hand</label>
+        <input type="text" id="hand" name="hand" maxlength="255" required
+               placeholder="Who amends it">
+      </div>
+      <div class="field">
+        <label for="status">Standing</label>
+        <select id="status" name="status">
+          {% for value in statuses %}
+          <option value="{{ value }}" {% if ticket.status == value %}selected{% endif %}>{{ standing_label(value) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="priority">Urgency</label>
+        <select id="priority" name="priority">
+          {% for value in priorities %}
+          <option value="{{ value }}" {% if ticket.priority == value %}selected{% endif %}>{{ urgency_label(value) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit">Amend petition</button>
+    </form>
+
+    <p class="rule" style="margin-top:22px">Strike from the ledger</p>
+    <p class="quiet">Striking a petition burns its record entire.</p>
+    <form method="post" action="/petitions/{{ ticket.ticket_id }}/delete">
+      <div class="oath">
+        <input type="checkbox" id="sworn" name="sworn" value="yes" required>
+        <label for="sworn">This deed cannot be undone</label>
+      </div>
+      <button type="submit" class="peril">Strike petition</button>
+    </form>
+  </section>
+</div>
+            </article>

@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import app, get_repository
-from ticketing.repository import LedgerTally, Ticket, TicketMessage
+from ticketing.repository import LedgerTally, StatusChange, Ticket, TicketMessage
 
 NOW = dt.datetime(2026, 3, 14, 18, 30)
 
@@ -27,8 +27,14 @@ class FakeRepository:
                 TicketMessage(2, 41, "A smith is sent for.", "Steward", NOW),
             ]
         }
+        self.changes = {
+            41: [StatusChange(1, 41, None, "open", "Gareth", NOW)],
+        }
         self.deleted: list[int] = []
         self.updated: list[tuple] = []
+
+    def list_status_changes(self, ticket_id):
+        return list(self.changes.get(ticket_id, []))
 
     def list_tickets(self):
         return list(self.tickets)
@@ -46,6 +52,7 @@ class FakeRepository:
     def create_ticket(self, title, description, status, priority, created_by):
         ticket = Ticket(99, title, status, priority, created_by, NOW, description)
         self.tickets.append(ticket)
+        self.changes[99] = [StatusChange(9, 99, None, status, created_by, NOW)]
         return ticket
 
     def add_message(self, ticket_id, message_text, author):
@@ -53,8 +60,8 @@ class FakeRepository:
         self.messages.setdefault(ticket_id, []).append(message)
         return message
 
-    def update_ticket(self, ticket_id, status, priority):
-        self.updated.append((ticket_id, status, priority))
+    def update_ticket(self, ticket_id, status, priority, changed_by):
+        self.updated.append((ticket_id, status, priority, changed_by))
         return self.tickets[0]
 
     def delete_ticket(self, ticket_id):
@@ -256,9 +263,10 @@ def test_append_rejects_empty_testimony(client, repo):
 
 def test_alter_updates_standing_and_urgency(client, repo):
     client.post("/petitions/41",
-                data={"status": "resolved", "priority": "low", "back": "/?open=41"},
+                data={"status": "resolved", "priority": "low", "hand": "Steward",
+                      "back": "/?open=41"},
                 follow_redirects=False)
-    assert repo.updated == [(41, "resolved", "low")]
+    assert repo.updated == [(41, "resolved", "low", "Steward")]
 
 
 def test_delete_requires_the_oath(client, repo):
@@ -376,3 +384,70 @@ def test_ledger_rows_show_the_title_not_the_grievance(client):
 def test_petition_without_a_grievance_says_so(client):
     card = client.get("/?open=39").text.split('class="card"')[1]
     assert "No grievance was set down" in card
+
+
+def test_card_fragment_renders_alone(client):
+    response = client.get("/petitions/41/card?back=/")
+    assert response.status_code == 200
+    body = response.text
+    assert '<article class="card"' in body
+    # a fragment, not a whole page
+    assert "<!DOCTYPE html>" not in body and "<table" not in body
+    assert "The counterweight chain has slipped its housing." in body
+
+
+def test_card_fragment_matches_what_the_full_page_renders(client):
+    fragment = client.get("/petitions/41/card?back=%2F%3Fopen%3D41").text
+    full = client.get("/?open=41").text
+    for probe in ("The grievance", "Append to the record", "Strike from the ledger",
+                  "<dt>Petitioner</dt>"):
+        assert probe in fragment and probe in full
+
+
+def test_card_fragment_404s_for_an_unknown_petition(client):
+    assert client.get("/petitions/999/card").status_code == 404
+
+
+def test_card_fragment_rejects_an_offsite_back_target(client):
+    body = client.get("/petitions/41/card?back=https://evil.test").text
+    assert "evil.test" not in body
+
+
+def test_toggle_links_are_marked_for_the_script(client):
+    page = client.get("/").text
+    assert 'data-petition="41" data-action="open"' in page
+    opened = client.get("/?open=41").text
+    assert 'data-petition="41" data-action="close"' in opened
+    assert 'class="card-row" data-for="41"' in opened
+
+
+def test_amendment_requires_a_hand(client, repo):
+    client.post("/petitions/41",
+                data={"status": "resolved", "priority": "low", "hand": "  ",
+                      "back": "/?open=41"},
+                follow_redirects=False)
+    assert repo.updated == []
+
+
+def test_amend_form_asks_for_the_hand(client):
+    card = client.get("/petitions/41/card").text
+    assert 'name="hand"' in card and "required" in card
+
+
+def test_passage_of_standing_is_shown(client):
+    card = client.get("/petitions/41/card").text
+    assert "The passage of standing" in card
+    assert "Entered as" in card
+    assert "by Gareth" in card
+
+
+def test_passage_renders_a_movement_with_both_ends(client, repo):
+    repo.changes[41].append(StatusChange(2, 41, "open", "in_progress", "Steward", NOW))
+    card = client.get("/petitions/41/card").text
+    assert "standing--open" in card and "standing--in_progress" in card
+    assert "by Steward" in card
+
+
+def test_petition_with_no_history_says_so(client):
+    card = client.get("/petitions/39/card").text
+    assert "No movement of standing has been recorded" in card

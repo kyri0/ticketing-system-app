@@ -49,7 +49,7 @@ a { color: var(--rubric); }
   color: var(--parchment-deep);
   margin: 0;
 }
-.banner .motto { font-style: italic; color: #B08D57; font-size: 15px; }
+.banner .motto { color: #B08D57; font-size: 15px; letter-spacing: .02em; }
 
 .shell { display: flex; align-items: flex-start; gap: 30px; padding: 24px 30px 60px; }
 .aside { flex: 0 0 256px; position: sticky; top: 24px; }
@@ -305,3 +305,16 @@ dialog.scriptorium .foot p { margin: 0; font-size: 15px; }
   font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft);
 }
 .card .facts dd { margin: 0; font-size: 16px; }
+
+/* The passage of standing: one line per movement, oldest first. */
+.passage { list-style: none; margin: 0 0 20px; padding: 0; }
+.passage li {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 8px 0; border-bottom: 1px solid var(--rule);
+}
+.passage li:last-child { border-bottom: none; }
+.passage .when {
+  min-width: 172px; font-size: 14px; color: var(--ink-soft); letter-spacing: .02em;
+}
+.passage .arrow { color: var(--ink-soft); }
+.passage .hand { font-size: 15px; color: var(--ink-soft); }

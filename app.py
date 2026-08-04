@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, Form, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -133,8 +133,10 @@ def _render(
         visible.sort(key=lambda t: (theme.URGENCY_RANK.get(t.priority, 9), -t.ticket_id))
 
     messages = []
+    changes = []
     if open_id is not None and any(t.ticket_id == open_id for t in visible):
         messages = repository.list_messages(open_id)
+        changes = repository.list_status_changes(open_id)
     else:
         open_id = None
 
@@ -147,6 +149,7 @@ def _render(
             "total_count": len(tickets),
             "tally": tally,
             "messages": messages,
+            "changes": changes,
             "open_id": open_id,
             "statuses": ALLOWED_STATUSES,
             "priorities": ALLOWED_PRIORITIES,
@@ -164,6 +167,38 @@ def _render(
                                "created_by": "", "priority": "medium"},
             "back": _back_link(standing, urgency, by, q, sort, open_id),
             "link": lambda oid: _back_link(standing, urgency, by, q, sort, oid),
+        },
+    )
+
+
+@app.get("/petitions/{ticket_id}/card")
+def petition_card(
+    request: Request,
+    ticket_id: int,
+    back: str = "/",
+    repository: TicketRepository = Depends(get_repository),
+):
+    """Render one petition card on its own.
+
+    ledger.js fetches this and splices it into the table, so expanding a
+    petition does not repaint the whole page. The same markup is rendered
+    server-side into the full page, so both paths stay identical.
+    """
+    ticket = next(
+        (t for t in repository.list_tickets() if t.ticket_id == ticket_id), None
+    )
+    if ticket is None:
+        return HTMLResponse("", status_code=404)
+    return templates.TemplateResponse(
+        request=request,
+        name="_card.html",
+        context={
+            "ticket": ticket,
+            "messages": repository.list_messages(ticket_id),
+            "changes": repository.list_status_changes(ticket_id),
+            "statuses": ALLOWED_STATUSES,
+            "priorities": ALLOWED_PRIORITIES,
+            "back": _safe_back(back),
         },
     )
 
@@ -215,7 +250,7 @@ def ledger(
             name="index.html",
             status_code=503,
             context={
-                "tickets": [], "total_count": 0, "messages": [], "open_id": None,
+                "tickets": [], "total_count": 0, "messages": [], "changes": [], "open_id": None,
                 "tally": LedgerTally(0, {}, {}),
                 "statuses": ALLOWED_STATUSES, "priorities": ALLOWED_PRIORITIES,
                 "petitioners": [],
@@ -292,12 +327,16 @@ def alter_petition(
     ticket_id: int,
     status: str = Form("open"),
     priority: str = Form("medium"),
+    hand: str = Form(""),
     back: str = Form("/"),
     repository: TicketRepository = Depends(get_repository),
 ):
     target = _safe_back(back)
     try:
-        repository.update_ticket(ticket_id, status, priority)
+        # Without a hand the history reads "unknown", which makes the log
+        # worthless — so it is required rather than defaulted.
+        clean_hand = required_text(hand, "Hand", max_length=MAX_NAME)
+        repository.update_ticket(ticket_id, status, priority, clean_hand)
     except (ValidationError, DatabaseOperationError) as error:
         logging.warning("alter failed on %s: %s", ticket_id, error)
         return RedirectResponse(target, status_code=SEE_OTHER)

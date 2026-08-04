@@ -58,6 +58,21 @@ ALTER TABLE public.tickets
 
 ALTER TABLE public.tickets
   ADD COLUMN description VARCHAR(4000) NOT NULL DEFAULT '';
+
+CREATE TABLE public.ticket_status (
+  status_id   BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  ticket_id   BIGINT       NOT NULL,
+  from_status VARCHAR(50),
+  to_status   VARCHAR(50)  NOT NULL,
+  changed_by  VARCHAR(255) NOT NULL,
+  changed_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_ticket_status_ticket FOREIGN KEY (ticket_id)
+    REFERENCES public.tickets (ticket_id) ON DELETE CASCADE,
+  CONSTRAINT chk_ticket_status_to
+    CHECK (to_status IN ('open', 'in_progress', 'resolved'))
+);
+
+CREATE INDEX ix_ticket_status_ticket ON public.ticket_status (ticket_id, changed_at);
 ```
 
 `title` is the one-line name of the matter; `description` is the grievance in full. Existing rows backfill to an empty description and the app shows "No grievance was set down" for those.
@@ -98,8 +113,16 @@ The Postgres role in the URL needs access to the pre-existing tables:
 
 - `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `public.tickets`
 - `SELECT` and `INSERT` on `public.ticket_messages`
+- `SELECT` and `INSERT` on `public.ticket_status`
+- `USAGE` on the `ticket_status` identity sequence
 
-Deleting a ticket removes its messages through the existing `ON DELETE CASCADE` foreign key, so no separate `DELETE` grant on `ticket_messages` is required.
+Deleting a ticket removes its messages **and its status history** through the `ON DELETE CASCADE` foreign keys, so no separate `DELETE` grant is required on either child table.
+
+## Status history
+
+`ticket_status` records every movement of a petition's standing. A row is written when a petition is created (`from_status` NULL, `to_status` `open`) and on each amendment that actually changes the standing — resubmitting the same value writes nothing. The read, the update, and the history insert share one transaction with `SELECT … FOR UPDATE` on the ticket row, so concurrent amendments cannot record a movement that never happened.
+
+Amending requires a **Hand**, since a history of anonymous changes is not worth keeping.
 
 Both primary keys are `GENERATED ALWAYS AS IDENTITY`; the app never supplies `ticket_id` or `message_id`, and it lets `created_at` fall back to its `CURRENT_TIMESTAMP` default.
 
