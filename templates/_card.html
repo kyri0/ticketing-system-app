@@ -14,20 +14,22 @@
   <p class="quiet">No grievance was set down when this petition was entered.</p>
 {% endif %}
 
-<p class="rule">The record</p>
-{% if not messages %}
-  <p class="quiet">Nothing has yet been set down against this petition.</p>
-{% else %}
-  {% for message in messages %}
-  <div class="entry{% if loop.first %} first{% endif %}">
-    <p class="who">{{ message.author }} · {{ message.created_at.strftime('%d %B %Y, %H:%M') }}</p>
-    <p class="say">{{ message.message_text }}</p>
-  </div>
-  {% endfor %}
-{% endif %}
+<details class="history" open>
+  <summary class="rule">The record</summary>
+  {% if not messages %}
+    <p class="quiet">Nothing has yet been set down against this petition.</p>
+  {% else %}
+    {% for message in messages %}
+    <div class="entry{% if loop.first %} first{% endif %}">
+      <p class="who">{{ message.author }} · {{ message.created_at.strftime('%d %B %Y, %H:%M') }}</p>
+      <p class="say">{{ message.message_text }}</p>
+    </div>
+    {% endfor %}
+  {% endif %}
+</details>
 
 <details class="history">
-  <summary class="rule">Show change history</summary>
+  <summary class="rule">Change history</summary>
   {% if not changes %}
     <p class="quiet">Nothing has been altered since this petition was entered.</p>
   {% else %}

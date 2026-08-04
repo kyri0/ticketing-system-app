@@ -110,7 +110,13 @@ def test_change_history_is_collapsed_by_default(client):
     page = client.get("/?open=41").text
     assert '<details class="history">' in page
     assert '<details class="history" open>' not in page
-    assert "Show change history" in page
+    assert "Change history" in page
+
+
+def test_record_is_expanded_by_default(client):
+    page = client.get("/?open=41").text
+    assert '<details class="history" open>' in page
+    assert "The record" in page
 
 
 def test_open_petition_shows_drop_cap_on_first_entry_only(client):
