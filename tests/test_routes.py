@@ -269,5 +269,26 @@ def test_flash_text_comes_from_codes_not_the_url(client):
     assert "<script>" not in client.get("/?msg=<script>alert(1)</script>&n=1").text
 
 
+def test_filters_still_work_without_javascript(client):
+    """The Sift button must survive in the markup as the no-JS fallback."""
+    assert 'id="sift-go"' in client.get("/").text
+
+
+def test_open_panel_is_remembered_so_several_boxes_can_be_ticked(client):
+    page = client.get("/?panel=urgency&urgency=urgent").text
+    assert 'data-panel="urgency" open' in page
+    assert 'data-panel="standing" open' not in page
+
+
+def test_unknown_panel_value_is_ignored(client):
+    page = client.get("/?panel=../etc/passwd").text
+    assert "open>" not in page.split('<p class="rule">Sift')[1][:400]
+
+
+def test_create_panel_lives_in_the_sidebar_not_above_the_ledger(client):
+    page = client.get("/").text
+    assert page.index('class="scriptorium"') < page.index('<main class="main">')
+
+
 def test_health_needs_no_database():
     assert TestClient(app).get("/health").json() == {"status": "ok"}

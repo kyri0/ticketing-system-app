@@ -105,6 +105,7 @@ def _render(
     q: str,
     sort: str,
     open_id: int | None,
+    panel: str = "",
     flash: str | None = None,
     error: str | None = None,
     draft: dict | None = None,
@@ -153,6 +154,7 @@ def _render(
             "by": by,
             "q": q,
             "sort": sort,
+            "panel": panel,
             "flash": flash,
             "error": error,
             "form_open": bool(error and draft),
@@ -177,6 +179,7 @@ def ledger(
     by: list[str] = Query(default=[]),
     q: str = "",
     sort: str = "urgency",
+    panel: str = "",
     open: int | None = None,
     msg: str | None = None,
     n: str | None = None,
@@ -188,6 +191,7 @@ def ledger(
     urgency = [u for u in urgency if u in ALLOWED_PRIORITIES]
     by = [b for b in by if b][:20]
     sort = sort if sort in ("urgency", "recent") else "urgency"
+    panel = panel if panel in ("standing", "urgency", "by") else ""
 
     try:
         return _render(
@@ -199,6 +203,7 @@ def ledger(
             q=q,
             sort=sort,
             open_id=open,
+            panel=panel,
             flash=theme.flash_text(msg, n),
         )
     except (DatabaseConfigurationError, DatabaseOperationError) as error:
@@ -212,6 +217,7 @@ def ledger(
                 "statuses": ALLOWED_STATUSES, "priorities": ALLOWED_PRIORITIES,
                 "petitioners": [],
                 "standing": [], "urgency": [], "by": [], "q": "", "sort": "urgency",
+                "panel": "",
                 "flash": None, "error": str(error), "form_open": False,
                 "draft": {"title": "", "created_by": "", "priority": "medium"},
                 "back": "/", "link": lambda oid: "/",
