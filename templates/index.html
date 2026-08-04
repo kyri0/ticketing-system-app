@@ -18,45 +18,10 @@
 <div class="shell">
 
   <aside class="aside sift">
-    <details class="scriptorium" {% if form_open %}open{% endif %}>
-      <summary>
-        <span class="mark" aria-hidden="true">❧</span>
-        <span class="what">
-          <strong>Enter a new petition</strong>
-          <small>State a grievance and it joins the ledger</small>
-        </span>
-      </summary>
-      <div class="body">
-        <form method="post" action="/petitions">
-          <div class="grid">
-            <div class="field wide">
-              <label for="title">Petition</label>
-              <input type="text" id="title" name="title" maxlength="255" required
-                     placeholder="State the grievance" value="{{ draft.title }}">
-            </div>
-            <div class="field">
-              <label for="created_by">Petitioner</label>
-              <input type="text" id="created_by" name="created_by" maxlength="255" required
-                     placeholder="Who brings it" value="{{ draft.created_by }}">
-            </div>
-            <div class="field">
-              <label for="new_priority">Urgency</label>
-              <select id="new_priority" name="priority">
-                {% for value in priorities %}
-                <option value="{{ value }}" {% if draft.priority == value %}selected{% endif %}>{{ urgency_label(value) }}</option>
-                {% endfor %}
-              </select>
-            </div>
-          </div>
-          <div class="foot">
-            <p class="quiet">
-              It enters as <span class="badge standing standing--open">Open</span> and may be amended after.
-            </p>
-            <button type="submit">Enter petition</button>
-          </div>
-        </form>
-      </div>
-    </details>
+    <button type="button" class="summon" id="summon">
+      <span class="mark" aria-hidden="true">❧</span>
+      <strong>Enter a new petition</strong>
+    </button>
 
     <p class="rule">Sift the ledger</p>
     <form method="get" action="/" id="sift">
@@ -119,7 +84,7 @@
         </select>
       </div>
       <button type="submit" id="sift-go">Sift</button>
-      {% if standing or urgency or q %}
+      {% if standing or urgency or by or q %}
       <p style="margin-top:12px"><a href="/">Clear the sifting</a></p>
       {% endif %}
     </form>
@@ -131,8 +96,12 @@
     {% if error %}<p class="alarm">{{ error }}</p>{% endif %}
 
     <div class="reckoning">
+      <section class="panel-tally total">
+        <p class="rule">Petitions</p>
+        <div class="tally"><div class="v">{{ tally.total }}</div></div>
+      </section>
       <section class="panel-tally">
-        <p class="rule">By standing · {{ tally.total }} in all</p>
+        <p class="rule">By standing</p>
         <div class="tallies">
           {% for value in statuses %}
           <div class="tally">
@@ -155,7 +124,6 @@
       </section>
     </div>
 
-
     {% if not total_count %}
       <p class="quiet">The ledger stands empty. Enter the first petition from the panel at left.</p>
     {% else %}
@@ -169,6 +137,7 @@
           <tr>
             <th class="col-n">№</th>
             <th>Petition</th>
+            <th class="col-p">Petitioner</th>
             <th class="col-u">Urgency</th>
             <th class="col-s">Standing</th>
             <th class="col-a"></th>
@@ -182,6 +151,7 @@
             <td>
               <a class="title-link" href="{{ link(none if is_open else ticket.ticket_id) }}#p{{ ticket.ticket_id }}">{{ ticket.title }}</a>
             </td>
+            <td class="col-p">{{ ticket.created_by }}</td>
             <td class="col-u"><span class="badge urgency--{{ ticket.priority }}">{{ urgency_label(ticket.priority) }}</span></td>
             <td class="col-s"><span class="badge standing standing--{{ ticket.status }}">{{ standing_label(ticket.status) }}</span></td>
             <td class="col-a">
@@ -191,13 +161,15 @@
             </td>
           </tr>
           {% if is_open %}
-          <tr><td colspan="5" style="padding:0 0 16px">
+          <tr><td colspan="6" style="padding:0 0 16px">
             <article class="card" id="p{{ ticket.ticket_id }}">
               <h2>Petition {{ ticket.ticket_id }} · {{ ticket.title }}</h2>
-              <p class="meta">
-                Entered by {{ ticket.created_by }} on {{ ticket.created_at.strftime('%d %B %Y') }}
-                · {{ urgency_label(ticket.priority) }} · {{ standing_label(ticket.status) }}
-              </p>
+              <dl class="facts">
+                <div><dt>Petitioner</dt><dd>{{ ticket.created_by }}</dd></div>
+                <div><dt>Entered</dt><dd>{{ ticket.created_at.strftime('%d %B %Y') }}</dd></div>
+                <div><dt>Urgency</dt><dd><span class="badge urgency--{{ ticket.priority }}">{{ urgency_label(ticket.priority) }}</span></dd></div>
+                <div><dt>Standing</dt><dd><span class="badge standing standing--{{ ticket.status }}">{{ standing_label(ticket.status) }}</span></dd></div>
+              </dl>
 
               <p class="rule">The record</p>
               {% if not messages %}
@@ -232,7 +204,7 @@
                 <section>
                   <p class="rule">Alter the petition</p>
                   {% if ticket.status not in statuses %}
-                  <p class="alarm">Stored standing is “{{ ticket.status }}”, which the ledger does not keep. Recording below will overwrite it.</p>
+                  <p class="alarm">Stored standing is “{{ ticket.status }}”, which the ledger does not keep. Amending below will overwrite it.</p>
                   {% endif %}
                   <form method="post" action="/petitions/{{ ticket.ticket_id }}">
                     <input type="hidden" name="back" value="{{ back }}">
@@ -277,6 +249,50 @@
 
   </main>
 </div>
+
+<!-- Rendered open when a submission failed validation, so the typed values are
+     still on screen even before ledger.js upgrades this to a modal. -->
+<dialog id="scriptorium" class="scriptorium" {% if form_open %}open{% endif %}>
+  <div class="head">
+    <span class="mark" aria-hidden="true">❧</span>
+    <span class="what">
+      <strong>Enter a new petition</strong>
+      <small>State a grievance and it joins the ledger</small>
+    </span>
+    <button type="button" class="dismiss" id="dismiss" aria-label="Close">✕</button>
+  </div>
+  <div class="body">
+    {% if error %}<p class="alarm">{{ error }}</p>{% endif %}
+    <form method="post" action="/petitions">
+      <div class="field">
+        <label for="title">Petition</label>
+        <input type="text" id="title" name="title" maxlength="255" required
+               placeholder="State the grievance" value="{{ draft.title }}">
+      </div>
+      <div class="grid">
+        <div class="field">
+          <label for="created_by">Petitioner</label>
+          <input type="text" id="created_by" name="created_by" maxlength="255" required
+                 placeholder="Who brings it" value="{{ draft.created_by }}">
+        </div>
+        <div class="field">
+          <label for="new_priority">Urgency</label>
+          <select id="new_priority" name="priority">
+            {% for value in priorities %}
+            <option value="{{ value }}" {% if draft.priority == value %}selected{% endif %}>{{ urgency_label(value) }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="foot">
+        <p class="quiet">
+          It enters as <span class="badge standing standing--open">Open</span> and may be amended after.
+        </p>
+        <button type="submit">Enter petition</button>
+      </div>
+    </form>
+  </div>
+</dialog>
 
 <script src="/static/ledger.js"></script>
 </body>

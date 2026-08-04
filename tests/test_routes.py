@@ -126,10 +126,17 @@ def test_urgency_sort_puts_the_direst_first(client):
     assert page.index("Portcullis") < page.index("Scribe") < page.index("Moat")
 
 
-def test_statistics_are_rendered_as_two_equal_panels(client):
+def test_statistics_are_rendered_as_three_panels(client):
     page = client.get("/").text
-    assert page.count('class="panel-tally"') == 2
-    assert "By standing · 3 in all" in page and "By urgency" in page
+    assert page.count('class="panel-tally') == 3
+    assert 'class="panel-tally total"' in page
+    assert "By standing" in page and "By urgency" in page
+    assert "in all" not in page
+
+
+def test_total_is_its_own_card_at_the_start(client):
+    page = client.get("/").text
+    assert page.index('panel-tally total') < page.index("By standing")
 
 
 def test_both_breakdowns_show_every_bucket(client):
@@ -172,8 +179,8 @@ def test_standing_cannot_be_chosen_at_creation(client, repo):
 
 
 def test_creation_form_offers_no_standing_control(client):
-    page = client.get("/").text
-    assert 'name="status"' not in page.split('<table class="ledger">')[0]
+    dialog = client.get("/").text.split('<dialog')[1]
+    assert 'name="status"' not in dialog
 
 
 def test_filter_by_petitioner(client):
@@ -285,9 +292,40 @@ def test_unknown_panel_value_is_ignored(client):
     assert "open>" not in page.split('<p class="rule">Sift')[1][:400]
 
 
-def test_create_panel_lives_in_the_sidebar_not_above_the_ledger(client):
+def test_create_panel_is_a_modal_opened_from_the_sidebar(client):
     page = client.get("/").text
-    assert page.index('class="scriptorium"') < page.index('<main class="main">')
+    assert page.index('id="summon"') < page.index('<main class="main">')
+    assert '<dialog id="scriptorium"' in page
+    # closed by default, and the dialog sits outside the main column
+    assert '<dialog id="scriptorium" class="scriptorium" >' in page
+
+
+def test_failed_creation_reopens_the_modal_with_values_intact(client):
+    response = client.post(
+        "/petitions", data={"title": "  ", "created_by": "Hal", "priority": "high"}
+    )
+    assert response.status_code == 400
+    dialog = response.text.split('<dialog')[1]
+    assert "open>" in dialog.split('>')[0] + ">"
+    assert 'value="Hal"' in dialog
+
+
+def test_petitioner_appears_in_the_ledger_rows(client):
+    page = client.get("/").text
+    header = page.split("<tbody>")[0]
+    assert "Petitioner" in header
+    assert '<td class="col-p">Gareth</td>' in page
+
+
+def test_petitioner_is_a_labelled_fact_in_the_open_card(client):
+    card = client.get("/?open=41").text.split('class="card"')[1]
+    assert "<dt>Petitioner</dt>" in card and "<dd>Gareth</dd>" in card
+
+
+def test_standing_stays_in_its_own_column(client):
+    page = client.get("/").text
+    assert '<th class="col-s">Standing</th>' in page
+    assert '<td class="col-s">' in page
 
 
 def test_health_needs_no_database():

@@ -4,6 +4,24 @@
 // everything still works. With it, the button disappears and any change to a
 // filter re-sifts the ledger immediately.
 (function () {
+  // The create panel opens as a modal so the Petition field gets a full line.
+  // It is rendered inline (<dialog open>) when a submission failed validation,
+  // so the typed values survive even if this script never runs.
+  var dialog = document.getElementById('scriptorium');
+  var summon = document.getElementById('summon');
+  if (dialog && summon && typeof dialog.showModal === 'function') {
+    var wasOpen = dialog.hasAttribute('open');
+    if (wasOpen) dialog.close();
+    summon.addEventListener('click', function () { dialog.showModal(); });
+    var dismiss = document.getElementById('dismiss');
+    if (dismiss) dismiss.addEventListener('click', function () { dialog.close(); });
+    // Clicking the backdrop closes it; clicks inside the panel must not.
+    dialog.addEventListener('click', function (event) {
+      if (event.target === dialog) dialog.close();
+    });
+    if (wasOpen) dialog.showModal();
+  }
+
   var form = document.getElementById('sift');
   if (!form) return;
 

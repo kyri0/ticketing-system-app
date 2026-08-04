@@ -76,6 +76,8 @@ a { color: var(--rubric); }
   border: 1px solid var(--rule-strong);
   padding: 13px 18px 15px;
 }
+.panel-tally.total { flex: 0 0 132px; }
+.panel-tally.total .v { font-size: 34px; color: var(--ink); }
 .panel-tally .rule { margin-bottom: 10px; }
 .tallies { display: flex; gap: 10px; }
 .tally { flex: 1; min-width: 0; }
@@ -131,44 +133,6 @@ button.peril:disabled { background: var(--stone); border-color: var(--stone); cu
 .pair { display: flex; gap: 14px; }
 .pair > * { flex: 1; min-width: 0; }
 
-/* This is the primary action on the page, so the closed state is styled as an
-   invitation rather than a disclosure triangle. */
-details.scriptorium { border: 1px solid var(--ink); margin-bottom: 26px; }
-.aside details.scriptorium .body { padding: 16px; }
-.aside details.scriptorium .grid { flex-direction: column; gap: 12px; }
-.aside details.scriptorium .grid .field,
-.aside details.scriptorium .grid .field.wide { flex: 1 1 auto; }
-.aside details.scriptorium .foot { flex-direction: column; align-items: stretch; gap: 12px; }
-.aside details.scriptorium .what small { display: none; }
-details.scriptorium > summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 13px 20px;
-  background: var(--ink);
-  color: var(--parchment-deep);
-}
-details.scriptorium > summary::-webkit-details-marker { display: none; }
-details.scriptorium > summary:hover { background: #3B2F26; }
-details.scriptorium .mark { font-size: 21px; color: var(--gilt); line-height: 1; }
-details.scriptorium .what { display: flex; flex-direction: column; gap: 1px; }
-details.scriptorium .what strong {
-  font-family: 'Cinzel', serif; font-size: 14px; font-weight: 500; letter-spacing: .1em;
-  text-transform: uppercase;
-}
-details.scriptorium .what small { font-size: 14px; color: #B08D57; }
-details.scriptorium[open] > summary { border-bottom: 3px solid var(--rubric); }
-details.scriptorium .body { padding: 20px; background: var(--parchment-deep); }
-details.scriptorium .grid { display: flex; gap: 16px; flex-wrap: wrap; }
-details.scriptorium .grid .field { flex: 1 1 190px; min-width: 0; margin-bottom: 0; }
-details.scriptorium .grid .field.wide { flex: 2 1 300px; }
-details.scriptorium .foot {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; flex-wrap: wrap; margin-top: 18px;
-}
-details.scriptorium .foot p { margin: 0; font-size: 15px; }
 
 table.ledger { width: 100%; border-collapse: collapse; table-layout: fixed; }
 table.ledger th {
@@ -179,6 +143,7 @@ table.ledger th {
 table.ledger td { padding: 11px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
 table.ledger tr.open-row > td { border-bottom: none; }
 .col-n { width: 52px; color: var(--ink-soft); }
+.col-p { width: 150px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .col-u { width: 116px; }
 .col-s { width: 124px; }
 .col-a { width: 104px; text-align: right; }
@@ -276,3 +241,59 @@ table.ledger tr.open-row > td { border-bottom: none; }
   .aside { position: static; flex: 1 1 auto; width: 100%; }
   .col-u, .col-s { width: auto; }
 }
+
+
+/* The create panel is a modal so the Petition field gets a full line to itself
+   instead of being squeezed into a 256px sidebar. */
+.summon {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  text-align: left; padding: 13px 16px; margin-bottom: 22px;
+  text-transform: none; letter-spacing: 0;
+}
+.summon .mark { font-size: 20px; color: var(--gilt); line-height: 1; }
+.summon strong {
+  font-family: 'Cinzel', serif; font-size: 13px; font-weight: 500;
+  letter-spacing: .09em; text-transform: uppercase;
+}
+
+dialog.scriptorium {
+  width: min(660px, calc(100vw - 40px));
+  padding: 0;
+  border: 1px solid var(--ink);
+  background: var(--parchment-deep);
+  color: var(--ink);
+}
+dialog.scriptorium::backdrop { background: rgba(42, 33, 26, .55); }
+dialog.scriptorium .head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 20px; background: var(--ink); color: var(--parchment-deep);
+  border-bottom: 3px solid var(--rubric);
+}
+dialog.scriptorium .mark { font-size: 21px; color: var(--gilt); line-height: 1; }
+dialog.scriptorium .what { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+dialog.scriptorium .what strong {
+  font-family: 'Cinzel', serif; font-size: 14px; font-weight: 500;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+dialog.scriptorium .what small { font-size: 14px; color: #B08D57; }
+dialog.scriptorium .dismiss {
+  background: transparent; border: none; color: var(--parchment-deep);
+  font-size: 17px; padding: 4px 6px; line-height: 1;
+}
+dialog.scriptorium .dismiss:hover { background: transparent; color: var(--gilt); }
+dialog.scriptorium .body { padding: 20px; }
+dialog.scriptorium .grid { display: flex; gap: 16px; flex-wrap: wrap; }
+dialog.scriptorium .grid .field { flex: 1 1 220px; min-width: 0; }
+dialog.scriptorium .foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-top: 6px;
+}
+dialog.scriptorium .foot p { margin: 0; font-size: 15px; }
+
+/* Definition list so the petitioner reads as a labelled fact, not prose. */
+.card .facts { display: flex; flex-wrap: wrap; gap: 10px 34px; margin: 0 0 20px; }
+.card .facts > div { display: flex; flex-direction: column; gap: 3px; }
+.card .facts dt {
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft);
+}
+.card .facts dd { margin: 0; font-size: 16px; }
