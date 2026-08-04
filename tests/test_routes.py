@@ -106,6 +106,13 @@ def test_thread_hidden_until_petition_is_opened(client):
     assert "A smith is sent for." in client.get("/?open=41").text
 
 
+def test_change_history_is_collapsed_by_default(client):
+    page = client.get("/?open=41").text
+    assert '<details class="history">' in page
+    assert '<details class="history" open>' not in page
+    assert "Show change history" in page
+
+
 def test_open_petition_shows_drop_cap_on_first_entry_only(client):
     page = client.get("/?open=41").text
     assert page.count('class="entry first"') == 1

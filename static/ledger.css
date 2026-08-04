@@ -306,6 +306,13 @@ dialog.scriptorium .foot p { margin: 0; font-size: 15px; }
 }
 .card .facts dd { margin: 0; font-size: 16px; }
 
+/* The history stays out of the way until the reader asks to see it. */
+.history { margin: 0 0 20px; }
+.history > summary { cursor: pointer; }
+.history > summary:hover { color: var(--ink); }
+.history > summary:focus-visible { outline: 2px solid var(--gilt); outline-offset: 3px; }
+.history .passage { margin-top: 12px; }
+
 /* The passage of standing: one line per movement, oldest first. */
 .passage { list-style: none; margin: 0 0 20px; padding: 0; }
 .passage li {

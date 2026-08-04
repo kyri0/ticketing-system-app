@@ -26,27 +26,29 @@
   {% endfor %}
 {% endif %}
 
-<p class="rule">What has been done</p>
-{% if not changes %}
-  <p class="quiet">Nothing has been altered since this petition was entered.</p>
-{% else %}
-  <ol class="passage">
-    {% for change in changes %}
-    <li>
-      <span class="when">{{ change.changed_at.strftime('%d %B %Y, %H:%M') }}</span>
-      <span class="what">{{ field_label(change.field) }}</span>
-      {% if change.from_value %}
-        <span class="badge {{ badge_class(change.field, change.from_value) }}">{{ value_label(change.field, change.from_value) }}</span>
-        <span class="arrow" aria-hidden="true">&rarr;</span>
-      {% else %}
-        <span class="quiet">Entered as</span>
-      {% endif %}
-      <span class="badge {{ badge_class(change.field, change.to_value) }}">{{ value_label(change.field, change.to_value) }}</span>
-      <span class="hand">by {{ change.changed_by }}</span>
-    </li>
-    {% endfor %}
-  </ol>
-{% endif %}
+<details class="history">
+  <summary class="rule">Show change history</summary>
+  {% if not changes %}
+    <p class="quiet">Nothing has been altered since this petition was entered.</p>
+  {% else %}
+    <ol class="passage">
+      {% for change in changes %}
+      <li>
+        <span class="when">{{ change.changed_at.strftime('%d %B %Y, %H:%M') }}</span>
+        <span class="what">{{ field_label(change.field) }}</span>
+        {% if change.from_value %}
+          <span class="badge {{ badge_class(change.field, change.from_value) }}">{{ value_label(change.field, change.from_value) }}</span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        {% else %}
+          <span class="quiet">Entered as</span>
+        {% endif %}
+        <span class="badge {{ badge_class(change.field, change.to_value) }}">{{ value_label(change.field, change.to_value) }}</span>
+        <span class="hand">by {{ change.changed_by }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+  {% endif %}
+</details>
 
 <div class="instruments">
   <section>
