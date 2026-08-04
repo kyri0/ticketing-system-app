@@ -10,6 +10,9 @@ from __future__ import annotations
 ALLOWED_STATUSES = ("open", "in_progress", "resolved")
 ALLOWED_PRIORITIES = ("low", "medium", "high", "urgent")
 
+# Fields whose movements the change log records.
+TRACKED_FIELDS = ("status", "priority")
+
 MAX_TITLE = 255
 MAX_NAME = 255
 MAX_MESSAGE = 10_000

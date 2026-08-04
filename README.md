@@ -118,11 +118,24 @@ The Postgres role in the URL needs access to the pre-existing tables:
 
 Deleting a ticket removes its messages **and its status history** through the `ON DELETE CASCADE` foreign keys, so no separate `DELETE` grant is required on either child table.
 
-## Status history
+## Change history
 
-`ticket_status` records every movement of a petition's standing. A row is written when a petition is created (`from_status` NULL, `to_status` `open`) and on each amendment that actually changes the standing — resubmitting the same value writes nothing. The read, the update, and the history insert share one transaction with `SELECT … FOR UPDATE` on the ticket row, so concurrent amendments cannot record a movement that never happened.
+`ticket_status` is a general change log, not a status-only table. Each row records **one field moving**:
+
+| Column | Meaning |
+|---|---|
+| `field` | `status` or `priority` |
+| `from_value` | previous value, `NULL` for the opening entry |
+| `to_value` | new value |
+| `changed_by` | the hand responsible |
+
+Creating a petition writes two opening rows (one per tracked field). An amendment writes one row per field that actually moved — resubmitting the same values writes nothing. Adding a third tracked field later costs a CHECK constraint, not a new table.
+
+A `CHECK` validates the value against its field, so a priority row can never hold `in_progress`. The read, the update, and the history inserts share one transaction with `SELECT … FOR UPDATE` on the ticket row, so concurrent amendments cannot record a movement that never happened.
 
 Amending requires a **Hand**, since a history of anonymous changes is not worth keeping.
+
+Run `migrations/002_generalise_history.sql` to widen an existing status-only table.
 
 Both primary keys are `GENERATED ALWAYS AS IDENTITY`; the app never supplies `ticket_id` or `message_id`, and it lets `created_at` fall back to its `CURRENT_TIMESTAMP` default.
 

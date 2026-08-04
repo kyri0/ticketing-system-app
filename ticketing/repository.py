@@ -64,13 +64,18 @@ class LedgerTally:
 
 
 @dataclass(frozen=True)
-class StatusChange:
-    """One movement of a petition's standing, as recorded in ticket_status."""
+class Change:
+    """One movement of one field, as recorded in ticket_status.
+
+    `field` is 'status' or 'priority'. Keeping both in one table means adding
+    another tracked field later costs a CHECK constraint, not a new table.
+    """
 
     status_id: int
     ticket_id: int
-    from_status: str | None
-    to_status: str
+    field: str
+    from_value: str | None
+    to_value: str
     changed_by: str
     changed_at: datetime
 
@@ -96,9 +101,12 @@ class TicketRepository:
                         ON DELETE CASCADE, message_text TEXT, author VARCHAR(255),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
         ticket_status(status_id BIGINT IDENTITY PK, ticket_id BIGINT FK -> tickets
-                      ON DELETE CASCADE, from_status VARCHAR(50) NULL,
-                      to_status VARCHAR(50), changed_by VARCHAR(255),
+                      ON DELETE CASCADE, field VARCHAR(20), from_value VARCHAR(50)
+                      NULL, to_value VARCHAR(50), changed_by VARCHAR(255),
                       changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+
+    ticket_status is a general change log keyed by `field`, not a status-only
+    table — one row per field moved.
 
     Both child tables cascade, so deleting a ticket takes its messages and its
     status history with it in one statement.
@@ -175,16 +183,19 @@ class TicketRepository:
                             (title, description, status, priority, created_by),
                         )
                         row = cursor.fetchone()
-                        # The opening entry: nothing before it, so from_status
+                        # The opening entries: nothing before them, so from_value
                         # is NULL. Same transaction as the INSERT, so a petition
-                        # can never exist without its first history row.
-                        cursor.execute(
+                        # can never exist without its opening history.
+                        cursor.executemany(
                             """
                             INSERT INTO public.ticket_status
-                                (ticket_id, from_status, to_status, changed_by)
-                            VALUES (%s, NULL, %s, %s)
+                                (ticket_id, field, from_value, to_value, changed_by)
+                            VALUES (%s, %s, NULL, %s, %s)
                             """,
-                            (row["ticket_id"], status, created_by),
+                            [
+                                (row["ticket_id"], "status", status, created_by),
+                                (row["ticket_id"], "priority", priority, created_by),
+                            ],
                         )
                         return Ticket(**row)
         except psycopg2.Error as error:
@@ -229,14 +240,13 @@ class TicketRepository:
                 with connection:
                     with connection.cursor() as cursor:
                         cursor.execute(
-                            "SELECT status FROM public.tickets "
+                            "SELECT status, priority FROM public.tickets "
                             "WHERE ticket_id = %s FOR UPDATE",
                             (ticket_id,),
                         )
                         current = cursor.fetchone()
                         if current is None:
                             raise TicketNotFoundError("This ticket no longer exists.")
-                        was = current["status"]
 
                         cursor.execute(
                             """
@@ -251,16 +261,22 @@ class TicketRepository:
                         if row is None:
                             raise TicketNotFoundError("This ticket no longer exists.")
 
-                        # Only a real movement is worth recording; re-submitting
-                        # the same standing should not pad the history.
-                        if was != status:
-                            cursor.execute(
+                        # Only real movements are worth recording; resubmitting
+                        # the same values should not pad the history. One row per
+                        # field, so an amendment touching both writes two.
+                        moved = [
+                            (ticket_id, field, current[field], after, changed_by)
+                            for field, after in (("status", status), ("priority", priority))
+                            if current[field] != after
+                        ]
+                        if moved:
+                            cursor.executemany(
                                 """
                                 INSERT INTO public.ticket_status
-                                    (ticket_id, from_status, to_status, changed_by)
-                                VALUES (%s, %s, %s, %s)
+                                    (ticket_id, field, from_value, to_value, changed_by)
+                                VALUES (%s, %s, %s, %s, %s)
                                 """,
-                                (ticket_id, was, status, changed_by),
+                                moved,
                             )
                         return Ticket(**row)
         except psycopg2.errors.CheckViolation as error:
@@ -269,24 +285,24 @@ class TicketRepository:
         except psycopg2.Error as error:
             raise _fail("Could not update the ticket in Lakebase.", error) from error
 
-    def list_status_changes(self, ticket_id: int) -> list[StatusChange]:
+    def list_changes(self, ticket_id: int) -> list[Change]:
         try:
             with self._pool.connection() as connection:
                 with connection:
                     with connection.cursor() as cursor:
                         cursor.execute(
                             """
-                            SELECT status_id, ticket_id, from_status, to_status,
-                                   changed_by, changed_at
+                            SELECT status_id, ticket_id, field, from_value,
+                                   to_value, changed_by, changed_at
                             FROM public.ticket_status
                             WHERE ticket_id = %s
                             ORDER BY changed_at ASC, status_id ASC
                             """,
                             (ticket_id,),
                         )
-                        return [StatusChange(**row) for row in cursor.fetchall()]
+                        return [Change(**row) for row in cursor.fetchall()]
         except psycopg2.Error as error:
-            raise _fail("Could not load the passage of standing from Lakebase.", error) from error
+            raise _fail("Could not load the petition's history from Lakebase.", error) from error
 
     def tally(self) -> LedgerTally:
         """Count tickets by standing and urgency in one aggregate query."""

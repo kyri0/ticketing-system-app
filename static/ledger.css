@@ -318,3 +318,7 @@ dialog.scriptorium .foot p { margin: 0; font-size: 15px; }
 }
 .passage .arrow { color: var(--ink-soft); }
 .passage .hand { font-size: 15px; color: var(--ink-soft); }
+.passage .what {
+  min-width: 78px; font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-soft);
+}

@@ -38,6 +38,28 @@ def urgency_label(priority: str) -> str:
     return URGENCY_LABELS.get(priority, priority)
 
 
+# The change log records which field moved, so the view needs to know how to
+# label and colour a value it is handed generically.
+FIELD_LABELS = {"status": "Standing", "priority": "Urgency"}
+
+
+def field_label(field: str) -> str:
+    return FIELD_LABELS.get(field, field)
+
+
+def value_label(field: str, value: str | None) -> str:
+    if value is None:
+        return ""
+    return urgency_label(value) if field == "priority" else standing_label(value)
+
+
+def badge_class(field: str, value: str) -> str:
+    """Which badge a logged value wears, matching the rest of the ledger."""
+    if field == "priority":
+        return f"urgency--{value}"
+    return f"standing standing--{value}"
+
+
 def flash_text(code: str | None, number: str | None) -> str | None:
     """Resolve a redirect's flash code. Free text is never taken from the URL."""
     template = FLASHES.get(code or "")

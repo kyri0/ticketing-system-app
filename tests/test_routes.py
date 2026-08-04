@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import app, get_repository
-from ticketing.repository import LedgerTally, StatusChange, Ticket, TicketMessage
+from ticketing.repository import Change, LedgerTally, Ticket, TicketMessage
 
 NOW = dt.datetime(2026, 3, 14, 18, 30)
 
@@ -28,12 +28,13 @@ class FakeRepository:
             ]
         }
         self.changes = {
-            41: [StatusChange(1, 41, None, "open", "Gareth", NOW)],
+            41: [Change(1, 41, "status", None, "open", "Gareth", NOW),
+                 Change(2, 41, "priority", None, "urgent", "Gareth", NOW)],
         }
         self.deleted: list[int] = []
         self.updated: list[tuple] = []
 
-    def list_status_changes(self, ticket_id):
+    def list_changes(self, ticket_id):
         return list(self.changes.get(ticket_id, []))
 
     def list_tickets(self):
@@ -52,7 +53,7 @@ class FakeRepository:
     def create_ticket(self, title, description, status, priority, created_by):
         ticket = Ticket(99, title, status, priority, created_by, NOW, description)
         self.tickets.append(ticket)
-        self.changes[99] = [StatusChange(9, 99, None, status, created_by, NOW)]
+        self.changes[99] = [Change(9, 99, "status", None, status, created_by, NOW)]
         return ticket
 
     def add_message(self, ticket_id, message_text, author):
@@ -434,20 +435,33 @@ def test_amend_form_asks_for_the_hand(client):
     assert 'name="hand"' in card and "required" in card
 
 
-def test_passage_of_standing_is_shown(client):
+def test_history_is_shown(client):
     card = client.get("/petitions/41/card").text
-    assert "The passage of standing" in card
+    assert "What has been done" in card
     assert "Entered as" in card
     assert "by Gareth" in card
 
 
-def test_passage_renders_a_movement_with_both_ends(client, repo):
-    repo.changes[41].append(StatusChange(2, 41, "open", "in_progress", "Steward", NOW))
+def test_history_renders_a_movement_with_both_ends(client, repo):
+    repo.changes[41].append(Change(3, 41, "status", "open", "in_progress", "Steward", NOW))
     card = client.get("/petitions/41/card").text
     assert "standing--open" in card and "standing--in_progress" in card
     assert "by Steward" in card
 
 
+def test_history_labels_which_field_moved(client):
+    card = client.get("/petitions/41/card").text
+    assert ">Standing<" in card and ">Urgency<" in card
+
+
+def test_priority_rows_wear_urgency_badges_not_standing_ones(client, repo):
+    repo.changes[41] = [Change(4, 41, "priority", "medium", "urgent", "Steward", NOW)]
+    card = client.get("/petitions/41/card").text
+    assert "urgency--medium" in card and "urgency--urgent" in card
+    assert "Ordinary" in card and "Dire" in card
+    assert "standing--" not in card.split("What has been done")[1].split("</ol>")[0]
+
+
 def test_petition_with_no_history_says_so(client):
     card = client.get("/petitions/39/card").text
-    assert "No movement of standing has been recorded" in card
+    assert "Nothing has been altered" in card

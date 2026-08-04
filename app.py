@@ -49,6 +49,9 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 templates.env.globals.update(
     standing_label=theme.standing_label,
     urgency_label=theme.urgency_label,
+    field_label=theme.field_label,
+    value_label=theme.value_label,
+    badge_class=theme.badge_class,
 )
 
 # 303 forces the browser to follow a POST with a GET, which is what makes
@@ -136,7 +139,7 @@ def _render(
     changes = []
     if open_id is not None and any(t.ticket_id == open_id for t in visible):
         messages = repository.list_messages(open_id)
-        changes = repository.list_status_changes(open_id)
+        changes = repository.list_changes(open_id)
     else:
         open_id = None
 
@@ -195,7 +198,7 @@ def petition_card(
         context={
             "ticket": ticket,
             "messages": repository.list_messages(ticket_id),
-            "changes": repository.list_status_changes(ticket_id),
+            "changes": repository.list_changes(ticket_id),
             "statuses": ALLOWED_STATUSES,
             "priorities": ALLOWED_PRIORITIES,
             "back": _safe_back(back),
