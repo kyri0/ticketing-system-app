@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Ledger of Petitions</title>
+<!-- Root-relative on purpose: url_for() emits an absolute URL, and behind an
+     HTTPS proxy it can resolve to http:// and be blocked as mixed content. -->
+<link rel="stylesheet" href="/static/ledger.css">
+</head>
+<body>
+
+<header class="banner">
+  <h1>The Ledger of Petitions</h1>
+  <span class="motto">Grievances heard, recorded, and in time settled</span>
+</header>
+
+<div class="shell">
+
+  <aside class="aside sift">
+    <p class="rule">Sift the ledger</p>
+    <form method="get" action="/">
+      <div class="field">
+        <label for="standing">Standing</label>
+        <select id="standing" name="standing" multiple size="3">
+          {% for value in statuses %}
+          <option value="{{ value }}" {% if value in standing %}selected{% endif %}>{{ standing_label(value) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="urgency">Urgency</label>
+        <select id="urgency" name="urgency" multiple size="4">
+          {% for value in priorities %}
+          <option value="{{ value }}" {% if value in urgency %}selected{% endif %}>{{ urgency_label(value) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="q">Search the petitions</label>
+        <input type="text" id="q" name="q" value="{{ q }}" placeholder="A word from the title">
+      </div>
+      <div class="field">
+        <label for="sort">Order</label>
+        <select id="sort" name="sort">
+          <option value="urgency" {% if sort == 'urgency' %}selected{% endif %}>By urgency</option>
+          <option value="recent" {% if sort == 'recent' %}selected{% endif %}>Most recent</option>
+        </select>
+      </div>
+      <button type="submit">Sift</button>
+      {% if standing or urgency or q %}
+      <p style="margin-top:12px"><a href="/">Clear the sifting</a></p>
+      {% endif %}
+    </form>
+  </aside>
+
+  <main class="main">
+
+    {% if flash %}<p class="flash">{{ flash }}</p>{% endif %}
+    {% if error %}<p class="alarm">{{ error }}</p>{% endif %}
+
+    <div class="reckoning">
+      <div class="tally"><div class="k">Petitions</div><div class="v">{{ tally.total }}</div></div>
+      {% for value in statuses %}
+      <div class="tally">
+        <div class="k">{{ standing_label(value) }}</div>
+        <div class="v {{ value }}">{{ tally.by_status.get(value, 0) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="by-urgency">By urgency —
+      {% for value in priorities %}{{ urgency_label(value) }} {{ tally.by_priority.get(value, 0) }}{% if not loop.last %} · {% endif %}{% endfor %}
+    </p>
+
+    <details class="scriptorium" {% if form_open %}open{% endif %}>
+      <summary>Enter a new petition</summary>
+      <div class="body">
+        <form method="post" action="/petitions">
+          <div class="pair">
+            <div class="field">
+              <label for="title">Petition</label>
+              <input type="text" id="title" name="title" maxlength="255" required
+                     placeholder="State the grievance" value="{{ draft.title }}">
+            </div>
+            <div class="field">
+              <label for="created_by">Petitioner</label>
+              <input type="text" id="created_by" name="created_by" maxlength="255" required
+                     placeholder="Who brings it" value="{{ draft.created_by }}">
+            </div>
+          </div>
+          <div class="pair">
+            <div class="field">
+              <label for="new_priority">Urgency</label>
+              <select id="new_priority" name="priority">
+                {% for value in priorities %}
+                <option value="{{ value }}" {% if draft.priority == value %}selected{% endif %}>{{ urgency_label(value) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field">
+              <label for="new_status">Standing</label>
+              <select id="new_status" name="status">
+                {% for value in statuses %}
+                <option value="{{ value }}" {% if draft.status == value %}selected{% endif %}>{{ standing_label(value) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <button type="submit">Enter it in the ledger</button>
+        </form>
+      </div>
+    </details>
+
+    {% if not total_count %}
+      <p class="quiet">The ledger stands empty. Enter the first petition above.</p>
+    {% else %}
+      <p class="quiet" style="margin-bottom:10px">Showing {{ tickets|length }} of {{ total_count }} petitions</p>
+
+      {% if not tickets %}
+        <p class="quiet">No petition answers to that sifting.</p>
+      {% else %}
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th class="col-n">№</th>
+            <th>Petition</th>
+            <th class="col-u">Urgency</th>
+            <th class="col-s">Standing</th>
+            <th class="col-a"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for ticket in tickets %}
+          {% set is_open = ticket.ticket_id == open_id %}
+          <tr {% if is_open %}class="open-row"{% endif %}>
+            <td class="col-n">{{ ticket.ticket_id }}</td>
+            <td>
+              <a class="title-link" href="{{ link(none if is_open else ticket.ticket_id) }}#p{{ ticket.ticket_id }}">{{ ticket.title }}</a>
+            </td>
+            <td class="col-u"><span class="badge urgency--{{ ticket.priority }}">{{ urgency_label(ticket.priority) }}</span></td>
+            <td class="col-s"><span class="badge standing standing--{{ ticket.status }}">{{ standing_label(ticket.status) }}</span></td>
+            <td class="col-a">
+              <a href="{{ link(none if is_open else ticket.ticket_id) }}#p{{ ticket.ticket_id }}">
+                <button type="button" class="quiet">{{ 'Close' if is_open else 'Read' }}</button>
+              </a>
+            </td>
+          </tr>
+          {% if is_open %}
+          <tr><td colspan="5" style="padding:0 0 16px">
+            <article class="card" id="p{{ ticket.ticket_id }}">
+              <h2>Petition {{ ticket.ticket_id }} · {{ ticket.title }}</h2>
+              <p class="meta">
+                Entered by {{ ticket.created_by }} on {{ ticket.created_at.strftime('%d %B %Y') }}
+                · {{ urgency_label(ticket.priority) }} · {{ standing_label(ticket.status) }}
+              </p>
+
+              <p class="rule">The record</p>
+              {% if not messages %}
+                <p class="quiet">Nothing has yet been set down against this petition.</p>
+              {% else %}
+                {% for message in messages %}
+                <div class="entry{% if loop.first %} first{% endif %}">
+                  <p class="who">{{ message.author }} · {{ message.created_at.strftime('%d %B %Y, %H:%M') }}</p>
+                  <p class="say">{{ message.message_text }}</p>
+                </div>
+                {% endfor %}
+              {% endif %}
+
+              <div class="instruments">
+                <section>
+                  <p class="rule">Append to the record</p>
+                  <form method="post" action="/petitions/{{ ticket.ticket_id }}/messages">
+                    <input type="hidden" name="back" value="{{ back }}">
+                    <div class="field">
+                      <label for="author">Hand</label>
+                      <input type="text" id="author" name="author" maxlength="255" required
+                             placeholder="Gareth the Warden">
+                    </div>
+                    <div class="field">
+                      <label for="message_text">Testimony</label>
+                      <textarea id="message_text" name="message_text" maxlength="10000" required></textarea>
+                    </div>
+                    <button type="submit">Set it down</button>
+                  </form>
+                </section>
+
+                <section>
+                  <p class="rule">Alter the petition</p>
+                  {% if ticket.status not in statuses %}
+                  <p class="alarm">Stored standing is “{{ ticket.status }}”, which the ledger does not keep. Recording below will overwrite it.</p>
+                  {% endif %}
+                  <form method="post" action="/petitions/{{ ticket.ticket_id }}">
+                    <input type="hidden" name="back" value="{{ back }}">
+                    <div class="field">
+                      <label for="status">Standing</label>
+                      <select id="status" name="status">
+                        {% for value in statuses %}
+                        <option value="{{ value }}" {% if ticket.status == value %}selected{% endif %}>{{ standing_label(value) }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="priority">Urgency</label>
+                      <select id="priority" name="priority">
+                        {% for value in priorities %}
+                        <option value="{{ value }}" {% if ticket.priority == value %}selected{% endif %}>{{ urgency_label(value) }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <button type="submit">Record it</button>
+                  </form>
+
+                  <p class="rule" style="margin-top:22px">Strike from the ledger</p>
+                  <p class="quiet">Striking a petition burns its record entire.</p>
+                  <form method="post" action="/petitions/{{ ticket.ticket_id }}/delete">
+                    <div class="oath">
+                      <input type="checkbox" id="sworn" name="sworn" value="yes" required>
+                      <label for="sworn">This deed cannot be undone</label>
+                    </div>
+                    <button type="submit" class="peril">Strike it out</button>
+                  </form>
+                </section>
+              </div>
+            </article>
+          </td></tr>
+          {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    {% endif %}
+
+  </main>
+</div>
+
+</body>
+</html>

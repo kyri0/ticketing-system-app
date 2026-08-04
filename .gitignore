@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Never commit credentials. LAKEBASE_URL contains a live Postgres password.
+.env
+.env.*
+.streamlit/secrets.toml
+*.pem
+
+# Day-1 reference material, not part of this app.
+databricks-lakebase-app-day-1-main/
+databricks-lakebase-app-day-1-main.zip

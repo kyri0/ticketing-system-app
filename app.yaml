@@ -1,0 +1,8 @@
+command: ['uvicorn', 'app:app', '--host', '0.0.0.0', '--port', '8000']
+env:
+  # The Lakebase connection URL is read at runtime from this Databricks secret,
+  # so no endpoint, role, or password value lives in source control.
+  - name: LAKEBASE_SECRET_SCOPE
+    value: 'database'
+  - name: LAKEBASE_SECRET_KEY
+    value: 'lakebase-url'
