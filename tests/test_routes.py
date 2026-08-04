@@ -126,21 +126,80 @@ def test_urgency_sort_puts_the_direst_first(client):
     assert page.index("Portcullis") < page.index("Scribe") < page.index("Moat")
 
 
-def test_statistics_are_rendered(client):
+def test_statistics_are_rendered_as_two_equal_panels(client):
     page = client.get("/").text
-    assert "Petitions" in page and "By urgency" in page
+    assert page.count('class="panel-tally"') == 2
+    assert "By standing · 3 in all" in page and "By urgency" in page
+
+
+def test_both_breakdowns_show_every_bucket(client):
+    page = client.get("/").text
+    for label in ("Open", "Underway", "Settled", "Trifling", "Ordinary", "Pressing", "Dire"):
+        assert label in page
+    # one count element per bucket, standing and urgency alike
+    assert page.count('class="v s-') == 3 and page.count('class="v u-') == 4
 
 
 def test_create_redirects_and_opens_the_new_petition(client, repo):
     response = client.post(
         "/petitions",
-        data={"title": "Drawbridge sticks", "created_by": "Hal",
-              "priority": "high", "status": "open"},
+        data={"title": "Drawbridge sticks", "created_by": "Hal", "priority": "high"},
         follow_redirects=False,
     )
     assert response.status_code == 303
     assert "open=99" in response.headers["location"]
     assert repo.tickets[-1].title == "Drawbridge sticks"
+
+
+def test_new_petitions_always_enter_open(client, repo):
+    client.post(
+        "/petitions",
+        data={"title": "Wolves at the gate", "created_by": "Hal", "priority": "urgent"},
+        follow_redirects=False,
+    )
+    assert repo.tickets[-1].status == "open"
+
+
+def test_standing_cannot_be_chosen_at_creation(client, repo):
+    """A crafted POST must not be able to file a petition already Settled."""
+    client.post(
+        "/petitions",
+        data={"title": "Sneaky", "created_by": "Hal", "priority": "low",
+              "status": "resolved"},
+        follow_redirects=False,
+    )
+    assert repo.tickets[-1].status == "open"
+
+
+def test_creation_form_offers_no_standing_control(client):
+    page = client.get("/").text
+    assert 'name="status"' not in page.split('<table class="ledger">')[0]
+
+
+def test_filter_by_petitioner(client):
+    page = client.get("/?by=Gareth").text
+    assert "Showing 1 of 3 petitions" in page
+    assert "Portcullis jams on the north gate" in page
+    assert "Moat is somewhat malodorous" not in page
+
+
+def test_petitioner_filter_lists_only_names_in_the_ledger(client):
+    page = client.get("/").text
+    for name in ("Gareth", "Alys", "Hob"):
+        assert f'name="by" value="{name}"' in page
+
+
+def test_petitioner_filter_combines_with_other_filters(client):
+    assert "Showing 0 of 3 petitions" in client.get("/?by=Gareth&standing=resolved").text
+
+
+def test_petitioner_filter_survives_a_redirect(client):
+    response = client.post(
+        "/petitions/41/messages",
+        data={"author": "Hal", "message_text": "Noted.", "back": "/?by=Gareth&open=41"},
+        follow_redirects=False,
+    )
+    assert "by=Gareth" in response.headers["location"]
 
 
 def test_create_rejects_blank_title_and_keeps_what_was_typed(client, repo):

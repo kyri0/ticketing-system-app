@@ -54,6 +54,9 @@ templates.env.globals.update(
 # refresh-after-submit harmless.
 SEE_OTHER = 303
 
+# Every petition enters the ledger Open; only an amendment moves it on.
+OPENING_STANDING = "open"
+
 
 @lru_cache(maxsize=1)
 def _repository() -> TicketRepository:
@@ -66,12 +69,18 @@ def get_repository() -> TicketRepository:
 
 
 def _back_link(
-    standing: list[str], urgency: list[str], q: str, sort: str, open_id: int | None
+    standing: list[str],
+    urgency: list[str],
+    by: list[str],
+    q: str,
+    sort: str,
+    open_id: int | None,
 ) -> str:
     """Rebuild the current view as a URL so redirects land where you left off."""
     params: list[tuple[str, str]] = []
     params += [("standing", value) for value in standing]
     params += [("urgency", value) for value in urgency]
+    params += [("by", value) for value in by]
     if q:
         params.append(("q", q))
     if sort != "urgency":
@@ -92,6 +101,7 @@ def _render(
     *,
     standing: list[str],
     urgency: list[str],
+    by: list[str],
     q: str,
     sort: str,
     open_id: int | None,
@@ -103,12 +113,17 @@ def _render(
     tickets = repository.list_tickets()
     tally = repository.tally()
 
+    # The petitioner list is whoever actually appears in the ledger, so the
+    # filter cannot offer a name that matches nothing.
+    petitioners = sorted({ticket.created_by for ticket in tickets}, key=str.casefold)
+
     needle = q.strip().lower()
     visible = [
         ticket
         for ticket in tickets
         if (not standing or ticket.status in standing)
         and (not urgency or ticket.priority in urgency)
+        and (not by or ticket.created_by in by)
         and (not needle or needle in ticket.title.lower())
     ]
     if sort == "urgency":
@@ -132,16 +147,18 @@ def _render(
             "open_id": open_id,
             "statuses": ALLOWED_STATUSES,
             "priorities": ALLOWED_PRIORITIES,
+            "petitioners": petitioners,
             "standing": standing,
             "urgency": urgency,
+            "by": by,
             "q": q,
             "sort": sort,
             "flash": flash,
             "error": error,
             "form_open": bool(error and draft),
-            "draft": draft or {"title": "", "created_by": "", "priority": "medium", "status": "open"},
-            "back": _back_link(standing, urgency, q, sort, open_id),
-            "link": lambda oid: _back_link(standing, urgency, q, sort, oid),
+            "draft": draft or {"title": "", "created_by": "", "priority": "medium"},
+            "back": _back_link(standing, urgency, by, q, sort, open_id),
+            "link": lambda oid: _back_link(standing, urgency, by, q, sort, oid),
         },
     )
 
@@ -157,6 +174,7 @@ def ledger(
     request: Request,
     standing: list[str] = Query(default=[]),
     urgency: list[str] = Query(default=[]),
+    by: list[str] = Query(default=[]),
     q: str = "",
     sort: str = "urgency",
     open: int | None = None,
@@ -168,6 +186,7 @@ def ledger(
     # smuggle values past validation.
     standing = [s for s in standing if s in ALLOWED_STATUSES]
     urgency = [u for u in urgency if u in ALLOWED_PRIORITIES]
+    by = [b for b in by if b][:20]
     sort = sort if sort in ("urgency", "recent") else "urgency"
 
     try:
@@ -176,6 +195,7 @@ def ledger(
             repository,
             standing=standing,
             urgency=urgency,
+            by=by,
             q=q,
             sort=sort,
             open_id=open,
@@ -190,9 +210,10 @@ def ledger(
                 "tickets": [], "total_count": 0, "messages": [], "open_id": None,
                 "tally": LedgerTally(0, {}, {}),
                 "statuses": ALLOWED_STATUSES, "priorities": ALLOWED_PRIORITIES,
-                "standing": [], "urgency": [], "q": "", "sort": "urgency",
+                "petitioners": [],
+                "standing": [], "urgency": [], "by": [], "q": "", "sort": "urgency",
                 "flash": None, "error": str(error), "form_open": False,
-                "draft": {"title": "", "created_by": "", "priority": "medium", "status": "open"},
+                "draft": {"title": "", "created_by": "", "priority": "medium"},
                 "back": "/", "link": lambda oid: "/",
             },
         )
@@ -204,22 +225,23 @@ def enter_petition(
     title: str = Form(""),
     created_by: str = Form(""),
     priority: str = Form("medium"),
-    status: str = Form("open"),
     repository: TicketRepository = Depends(get_repository),
 ):
+    # A petition always enters the ledger Open. The standing is not the
+    # petitioner's to choose, so the form does not offer it and the route does
+    # not read it — a crafted POST cannot create a pre-Settled petition.
     try:
         clean_title = required_text(title, "Petition", max_length=MAX_TITLE)
         clean_by = required_text(created_by, "Petitioner", max_length=MAX_NAME)
-        ticket = repository.create_ticket(clean_title, status, priority, clean_by)
+        ticket = repository.create_ticket(clean_title, OPENING_STANDING, priority, clean_by)
     except (ValidationError, DatabaseOperationError) as error:
         # Re-render with the typed values intact rather than redirecting away
         # from work the petitioner just did.
         return _render(
             request, repository,
-            standing=[], urgency=[], q="", sort="urgency", open_id=None,
+            standing=[], urgency=[], by=[], q="", sort="urgency", open_id=None,
             error=str(error),
-            draft={"title": title, "created_by": created_by,
-                   "priority": priority, "status": status},
+            draft={"title": title, "created_by": created_by, "priority": priority},
             status_code=400,
         )
     return RedirectResponse(

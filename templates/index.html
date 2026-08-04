@@ -21,20 +21,48 @@
     <p class="rule">Sift the ledger</p>
     <form method="get" action="/">
       <div class="field">
-        <label for="standing">Standing</label>
-        <select id="standing" name="standing" multiple size="3">
-          {% for value in statuses %}
-          <option value="{{ value }}" {% if value in standing %}selected{% endif %}>{{ standing_label(value) }}</option>
-          {% endfor %}
-        </select>
+        <label>Standing</label>
+        <details class="dropdown">
+          <summary>{% if standing %}{% for value in standing %}{{ standing_label(value) }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}Any{% endif %}</summary>
+          <div class="panel">
+            {% for value in statuses %}
+            <label class="check">
+              <input type="checkbox" name="standing" value="{{ value }}" {% if value in standing %}checked{% endif %}>
+              <span>{{ standing_label(value) }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </details>
       </div>
       <div class="field">
-        <label for="urgency">Urgency</label>
-        <select id="urgency" name="urgency" multiple size="4">
-          {% for value in priorities %}
-          <option value="{{ value }}" {% if value in urgency %}selected{% endif %}>{{ urgency_label(value) }}</option>
-          {% endfor %}
-        </select>
+        <label>Urgency</label>
+        <details class="dropdown">
+          <summary>{% if urgency %}{% for value in urgency %}{{ urgency_label(value) }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}Any{% endif %}</summary>
+          <div class="panel">
+            {% for value in priorities %}
+            <label class="check">
+              <input type="checkbox" name="urgency" value="{{ value }}" {% if value in urgency %}checked{% endif %}>
+              <span>{{ urgency_label(value) }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
+      <div class="field">
+        <label>Petitioner</label>
+        <details class="dropdown">
+          <summary>{% if by %}{% for value in by %}{{ value }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}Any{% endif %}</summary>
+          <div class="panel scroll">
+            {% for value in petitioners %}
+            <label class="check">
+              <input type="checkbox" name="by" value="{{ value }}" {% if value in by %}checked{% endif %}>
+              <span>{{ value }}</span>
+            </label>
+            {% else %}
+            <p class="quiet" style="padding:5px 10px;margin:0">No petitioners yet.</p>
+            {% endfor %}
+          </div>
+        </details>
       </div>
       <div class="field">
         <label for="q">Search the petitions</label>
@@ -60,24 +88,42 @@
     {% if error %}<p class="alarm">{{ error }}</p>{% endif %}
 
     <div class="reckoning">
-      <div class="tally"><div class="k">Petitions</div><div class="v">{{ tally.total }}</div></div>
-      {% for value in statuses %}
-      <div class="tally">
-        <div class="k">{{ standing_label(value) }}</div>
-        <div class="v {{ value }}">{{ tally.by_status.get(value, 0) }}</div>
-      </div>
-      {% endfor %}
+      <section class="panel-tally">
+        <p class="rule">By standing · {{ tally.total }} in all</p>
+        <div class="tallies">
+          {% for value in statuses %}
+          <div class="tally">
+            <div class="k">{{ standing_label(value) }}</div>
+            <div class="v s-{{ value }}">{{ tally.by_status.get(value, 0) }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      <section class="panel-tally">
+        <p class="rule">By urgency</p>
+        <div class="tallies">
+          {% for value in priorities %}
+          <div class="tally">
+            <div class="k">{{ urgency_label(value) }}</div>
+            <div class="v u-{{ value }}">{{ tally.by_priority.get(value, 0) }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
     </div>
-    <p class="by-urgency">By urgency —
-      {% for value in priorities %}{{ urgency_label(value) }} {{ tally.by_priority.get(value, 0) }}{% if not loop.last %} · {% endif %}{% endfor %}
-    </p>
 
     <details class="scriptorium" {% if form_open %}open{% endif %}>
-      <summary>Enter a new petition</summary>
+      <summary>
+        <span class="mark" aria-hidden="true">❧</span>
+        <span class="what">
+          <strong>Enter a new petition</strong>
+          <small>State a grievance and it joins the ledger</small>
+        </span>
+      </summary>
       <div class="body">
         <form method="post" action="/petitions">
-          <div class="pair">
-            <div class="field">
+          <div class="grid">
+            <div class="field wide">
               <label for="title">Petition</label>
               <input type="text" id="title" name="title" maxlength="255" required
                      placeholder="State the grievance" value="{{ draft.title }}">
@@ -87,8 +133,6 @@
               <input type="text" id="created_by" name="created_by" maxlength="255" required
                      placeholder="Who brings it" value="{{ draft.created_by }}">
             </div>
-          </div>
-          <div class="pair">
             <div class="field">
               <label for="new_priority">Urgency</label>
               <select id="new_priority" name="priority">
@@ -97,16 +141,13 @@
                 {% endfor %}
               </select>
             </div>
-            <div class="field">
-              <label for="new_status">Standing</label>
-              <select id="new_status" name="status">
-                {% for value in statuses %}
-                <option value="{{ value }}" {% if draft.status == value %}selected{% endif %}>{{ standing_label(value) }}</option>
-                {% endfor %}
-              </select>
-            </div>
           </div>
-          <button type="submit">Enter it in the ledger</button>
+          <div class="foot">
+            <p class="quiet">
+              It enters as <span class="badge standing standing--open">Open</span> and may be amended after.
+            </p>
+            <button type="submit">Enter petition</button>
+          </div>
         </form>
       </div>
     </details>
@@ -180,7 +221,7 @@
                       <label for="message_text">Testimony</label>
                       <textarea id="message_text" name="message_text" maxlength="10000" required></textarea>
                     </div>
-                    <button type="submit">Set it down</button>
+                    <button type="submit">Add testimony</button>
                   </form>
                 </section>
 
@@ -207,7 +248,7 @@
                         {% endfor %}
                       </select>
                     </div>
-                    <button type="submit">Record it</button>
+                    <button type="submit">Amend petition</button>
                   </form>
 
                   <p class="rule" style="margin-top:22px">Strike from the ledger</p>
@@ -217,7 +258,7 @@
                       <input type="checkbox" id="sworn" name="sworn" value="yes" required>
                       <label for="sworn">This deed cannot be undone</label>
                     </div>
-                    <button type="submit" class="peril">Strike it out</button>
+                    <button type="submit" class="peril">Strike petition</button>
                   </form>
                 </section>
               </div>
