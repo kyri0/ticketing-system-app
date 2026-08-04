@@ -30,6 +30,7 @@ from ticketing.repository import (
 from ticketing.validation import (
     ALLOWED_PRIORITIES,
     ALLOWED_STATUSES,
+    MAX_DESCRIPTION,
     MAX_MESSAGE,
     MAX_NAME,
     MAX_TITLE,
@@ -125,7 +126,8 @@ def _render(
         if (not standing or ticket.status in standing)
         and (not urgency or ticket.priority in urgency)
         and (not by or ticket.created_by in by)
-        and (not needle or needle in ticket.title.lower())
+        and (not needle or needle in ticket.title.lower()
+             or needle in ticket.description.lower())
     ]
     if sort == "urgency":
         visible.sort(key=lambda t: (theme.URGENCY_RANK.get(t.priority, 9), -t.ticket_id))
@@ -158,7 +160,8 @@ def _render(
             "flash": flash,
             "error": error,
             "form_open": bool(error and draft),
-            "draft": draft or {"title": "", "created_by": "", "priority": "medium"},
+            "draft": draft or {"title": "", "description": "",
+                               "created_by": "", "priority": "medium"},
             "back": _back_link(standing, urgency, by, q, sort, open_id),
             "link": lambda oid: _back_link(standing, urgency, by, q, sort, oid),
         },
@@ -219,7 +222,7 @@ def ledger(
                 "standing": [], "urgency": [], "by": [], "q": "", "sort": "urgency",
                 "panel": "",
                 "flash": None, "error": str(error), "form_open": False,
-                "draft": {"title": "", "created_by": "", "priority": "medium"},
+                "draft": {"title": "", "description": "", "created_by": "", "priority": "medium"},
                 "back": "/", "link": lambda oid: "/",
             },
         )
@@ -229,6 +232,7 @@ def ledger(
 def enter_petition(
     request: Request,
     title: str = Form(""),
+    description: str = Form(""),
     created_by: str = Form(""),
     priority: str = Form("medium"),
     repository: TicketRepository = Depends(get_repository),
@@ -237,9 +241,12 @@ def enter_petition(
     # petitioner's to choose, so the form does not offer it and the route does
     # not read it — a crafted POST cannot create a pre-Settled petition.
     try:
-        clean_title = required_text(title, "Petition", max_length=MAX_TITLE)
+        clean_title = required_text(title, "Title", max_length=MAX_TITLE)
+        clean_body = required_text(description, "Grievance", max_length=MAX_DESCRIPTION)
         clean_by = required_text(created_by, "Petitioner", max_length=MAX_NAME)
-        ticket = repository.create_ticket(clean_title, OPENING_STANDING, priority, clean_by)
+        ticket = repository.create_ticket(
+            clean_title, clean_body, OPENING_STANDING, priority, clean_by
+        )
     except (ValidationError, DatabaseOperationError) as error:
         # Re-render with the typed values intact rather than redirecting away
         # from work the petitioner just did.
@@ -247,7 +254,8 @@ def enter_petition(
             request, repository,
             standing=[], urgency=[], by=[], q="", sort="urgency", open_id=None,
             error=str(error),
-            draft={"title": title, "created_by": created_by, "priority": priority},
+            draft={"title": title, "description": description,
+                   "created_by": created_by, "priority": priority},
             status_code=400,
         )
     return RedirectResponse(

@@ -171,6 +171,13 @@
                 <div><dt>Standing</dt><dd><span class="badge standing standing--{{ ticket.status }}">{{ standing_label(ticket.status) }}</span></dd></div>
               </dl>
 
+              <p class="rule">The grievance</p>
+              {% if ticket.description %}
+                <p class="grievance">{{ ticket.description }}</p>
+              {% else %}
+                <p class="quiet">No grievance was set down when this petition was entered.</p>
+              {% endif %}
+
               <p class="rule">The record</p>
               {% if not messages %}
                 <p class="quiet">Nothing has yet been set down against this petition.</p>
@@ -265,9 +272,14 @@
     {% if error %}<p class="alarm">{{ error }}</p>{% endif %}
     <form method="post" action="/petitions">
       <div class="field">
-        <label for="title">Petition</label>
+        <label for="title">Title</label>
         <input type="text" id="title" name="title" maxlength="255" required
-               placeholder="State the grievance" value="{{ draft.title }}">
+               placeholder="Name the matter in a line" value="{{ draft.title }}">
+      </div>
+      <div class="field">
+        <label for="description">The grievance</label>
+        <textarea id="description" name="description" maxlength="4000" required
+                  placeholder="Set out the matter in full">{{ draft.description }}</textarea>
       </div>
       <div class="grid">
         <div class="field">

@@ -16,9 +16,10 @@ NOW = dt.datetime(2026, 3, 14, 18, 30)
 class FakeRepository:
     def __init__(self):
         self.tickets = [
-            Ticket(41, "Portcullis jams on the north gate", "open", "urgent", "Gareth", NOW),
-            Ticket(39, "Scribe requests <b>fresh</b> vellum", "in_progress", "high", "Alys", NOW),
-            Ticket(36, "Moat is somewhat malodorous", "resolved", "low", "Hob", NOW),
+            Ticket(41, "Portcullis jams", "open", "urgent", "Gareth", NOW,
+                   "The counterweight chain has slipped its housing."),
+            Ticket(39, "Scribe requests <b>fresh</b> vellum", "in_progress", "high", "Alys", NOW, ""),
+            Ticket(36, "Moat is malodorous", "resolved", "low", "Hob", NOW, "It reeks."),
         ]
         self.messages = {
             41: [
@@ -42,8 +43,8 @@ class FakeRepository:
             by_priority[t.priority] = by_priority.get(t.priority, 0) + 1
         return LedgerTally(len(self.tickets), by_status, by_priority)
 
-    def create_ticket(self, title, status, priority, created_by):
-        ticket = Ticket(99, title, status, priority, created_by, NOW)
+    def create_ticket(self, title, description, status, priority, created_by):
+        ticket = Ticket(99, title, status, priority, created_by, NOW, description)
         self.tickets.append(ticket)
         return ticket
 
@@ -75,8 +76,8 @@ def client(repo):
 
 def test_ledger_lists_every_petition(client):
     page = client.get("/").text
-    assert "Portcullis jams on the north gate" in page
-    assert "Moat is somewhat malodorous" in page
+    assert "Portcullis jams" in page
+    assert "Moat is malodorous" in page
     assert "Showing 3 of 3 petitions" in page
 
 
@@ -106,7 +107,7 @@ def test_open_petition_shows_drop_cap_on_first_entry_only(client):
 def test_filter_by_standing(client):
     page = client.get("/?standing=open").text
     assert "Showing 1 of 3 petitions" in page
-    assert "Moat is somewhat malodorous" not in page
+    assert "Moat is malodorous" not in page
 
 
 def test_filter_by_urgency(client):
@@ -115,6 +116,10 @@ def test_filter_by_urgency(client):
 
 def test_search_matches_title(client):
     assert "Showing 1 of 3 petitions" in client.get("/?q=moat").text
+
+
+def test_search_also_matches_the_grievance_text(client):
+    assert "Showing 1 of 3 petitions" in client.get("/?q=counterweight").text
 
 
 def test_unknown_filter_values_are_ignored(client):
@@ -150,7 +155,8 @@ def test_both_breakdowns_show_every_bucket(client):
 def test_create_redirects_and_opens_the_new_petition(client, repo):
     response = client.post(
         "/petitions",
-        data={"title": "Drawbridge sticks", "created_by": "Hal", "priority": "high"},
+        data={"title": "Drawbridge sticks", "description": "It sticks.",
+              "created_by": "Hal", "priority": "high"},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -161,7 +167,8 @@ def test_create_redirects_and_opens_the_new_petition(client, repo):
 def test_new_petitions_always_enter_open(client, repo):
     client.post(
         "/petitions",
-        data={"title": "Wolves at the gate", "created_by": "Hal", "priority": "urgent"},
+        data={"title": "Wolves", "description": "At the gate.",
+              "created_by": "Hal", "priority": "urgent"},
         follow_redirects=False,
     )
     assert repo.tickets[-1].status == "open"
@@ -171,8 +178,8 @@ def test_standing_cannot_be_chosen_at_creation(client, repo):
     """A crafted POST must not be able to file a petition already Settled."""
     client.post(
         "/petitions",
-        data={"title": "Sneaky", "created_by": "Hal", "priority": "low",
-              "status": "resolved"},
+        data={"title": "Sneaky", "description": "x", "created_by": "Hal",
+              "priority": "low", "status": "resolved"},
         follow_redirects=False,
     )
     assert repo.tickets[-1].status == "open"
@@ -186,8 +193,8 @@ def test_creation_form_offers_no_standing_control(client):
 def test_filter_by_petitioner(client):
     page = client.get("/?by=Gareth").text
     assert "Showing 1 of 3 petitions" in page
-    assert "Portcullis jams on the north gate" in page
-    assert "Moat is somewhat malodorous" not in page
+    assert "Portcullis jams" in page
+    assert "Moat is malodorous" not in page
 
 
 def test_petitioner_filter_lists_only_names_in_the_ledger(client):
@@ -212,10 +219,10 @@ def test_petitioner_filter_survives_a_redirect(client):
 def test_create_rejects_blank_title_and_keeps_what_was_typed(client, repo):
     response = client.post(
         "/petitions",
-        data={"title": "   ", "created_by": "Hal", "priority": "high", "status": "open"},
+        data={"title": "   ", "description": "x", "created_by": "Hal", "priority": "high"},
     )
     assert response.status_code == 400
-    assert "Petition is required." in response.text
+    assert "Title is required." in response.text
     assert 'value="Hal"' in response.text
     assert len(repo.tickets) == 3
 
@@ -223,7 +230,7 @@ def test_create_rejects_blank_title_and_keeps_what_was_typed(client, repo):
 def test_create_rejects_overlong_title(client):
     response = client.post(
         "/petitions",
-        data={"title": "x" * 300, "created_by": "Hal", "priority": "low", "status": "open"},
+        data={"title": "x" * 300, "description": "x", "created_by": "Hal", "priority": "low"},
     )
     assert response.status_code == 400
     assert "255 characters" in response.text
@@ -302,7 +309,7 @@ def test_create_panel_is_a_modal_opened_from_the_sidebar(client):
 
 def test_failed_creation_reopens_the_modal_with_values_intact(client):
     response = client.post(
-        "/petitions", data={"title": "  ", "created_by": "Hal", "priority": "high"}
+        "/petitions", data={"title": "  ", "description": "x", "created_by": "Hal", "priority": "high"}
     )
     assert response.status_code == 400
     dialog = response.text.split('<dialog')[1]
@@ -330,3 +337,42 @@ def test_standing_stays_in_its_own_column(client):
 
 def test_health_needs_no_database():
     assert TestClient(app).get("/health").json() == {"status": "ok"}
+
+
+def test_grievance_is_required_and_capped(client, repo):
+    blank = client.post(
+        "/petitions",
+        data={"title": "A matter", "description": "  ", "created_by": "Hal", "priority": "low"},
+    )
+    assert blank.status_code == 400 and "Grievance is required." in blank.text
+
+    long = client.post(
+        "/petitions",
+        data={"title": "A matter", "description": "x" * 4001,
+              "created_by": "Hal", "priority": "low"},
+    )
+    assert long.status_code == 400 and "4000 characters" in long.text
+    assert len(repo.tickets) == 3
+
+
+def test_grievance_is_stored_and_shown_in_the_open_card(client, repo):
+    client.post(
+        "/petitions",
+        data={"title": "Drawbridge", "description": "It sticks in the rain.",
+              "created_by": "Hal", "priority": "high"},
+        follow_redirects=False,
+    )
+    assert repo.tickets[-1].description == "It sticks in the rain."
+    card = client.get("/?open=41").text.split('class="card"')[1]
+    assert "The counterweight chain has slipped its housing." in card
+
+
+def test_ledger_rows_show_the_title_not_the_grievance(client):
+    rows = client.get("/").text.split("<tbody>")[1]
+    assert "Portcullis jams" in rows
+    assert "counterweight" not in rows
+
+
+def test_petition_without_a_grievance_says_so(client):
+    card = client.get("/?open=39").text.split('class="card"')[1]
+    assert "No grievance was set down" in card

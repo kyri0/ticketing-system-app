@@ -11,6 +11,7 @@ The database stores plain values. The vocabulary is presentation only, and lives
 | Stored | Shown | | Stored | Shown |
 |---|---|---|---|---|
 | ticket | Petition | | `low` | Trifling |
+| `description` | The grievance | | message | Testimony |
 | `status` | Standing | | `medium` | Ordinary |
 | `priority` | Urgency | | `high` | Pressing |
 | `open` | Open | | `urgent` | Dire |
@@ -54,7 +55,12 @@ ALTER TABLE public.tickets
 ALTER TABLE public.tickets
   ADD CONSTRAINT chk_tickets_priority
   CHECK (priority IN ('low', 'medium', 'high', 'urgent'));
+
+ALTER TABLE public.tickets
+  ADD COLUMN description VARCHAR(4000) NOT NULL DEFAULT '';
 ```
+
+`title` is the one-line name of the matter; `description` is the grievance in full. Existing rows backfill to an empty description and the app shows "No grievance was set down" for those.
 
 The app runs no DDL of its own.
 

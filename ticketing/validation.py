@@ -13,6 +13,7 @@ ALLOWED_PRIORITIES = ("low", "medium", "high", "urgent")
 MAX_TITLE = 255
 MAX_NAME = 255
 MAX_MESSAGE = 10_000
+MAX_DESCRIPTION = 4_000
 
 
 class ValidationError(ValueError):

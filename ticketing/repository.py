@@ -50,6 +50,8 @@ class Ticket:
     priority: str
     created_by: str
     created_at: datetime
+    # Last and defaulted so existing positional construction still works.
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -74,8 +76,10 @@ class TicketRepository:
     """Owns all direct access to the existing Lakebase tables.
 
     Schema (public):
-        tickets(ticket_id BIGINT IDENTITY PK, title VARCHAR(255), status VARCHAR(50),
-                created_by VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+        tickets(ticket_id BIGINT IDENTITY PK, title VARCHAR(255),
+                description VARCHAR(4000) NOT NULL DEFAULT '', status VARCHAR(50),
+                priority VARCHAR(20), created_by VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
         ticket_messages(message_id BIGINT IDENTITY PK, ticket_id BIGINT FK -> tickets
                         ON DELETE CASCADE, message_text TEXT, author VARCHAR(255),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
@@ -99,7 +103,7 @@ class TicketRepository:
                     with connection.cursor() as cursor:
                         cursor.execute(
                             """
-                            SELECT ticket_id, title, status, priority, created_by, created_at
+                            SELECT ticket_id, title, description, status, priority, created_by, created_at
                             FROM public.tickets
                             ORDER BY created_at DESC, ticket_id DESC
                             """
@@ -127,7 +131,12 @@ class TicketRepository:
             raise _fail("Could not load ticket messages from Lakebase.", error) from error
 
     def create_ticket(
-        self, title: str, status: str, priority: str, created_by: str
+        self,
+        title: str,
+        description: str,
+        status: str,
+        priority: str,
+        created_by: str,
     ) -> Ticket:
         valid_status(status)
         valid_priority(priority)
@@ -139,11 +148,12 @@ class TicketRepository:
                         # defaults to CURRENT_TIMESTAMP; the database owns both.
                         cursor.execute(
                             """
-                            INSERT INTO public.tickets (title, status, priority, created_by)
-                            VALUES (%s, %s, %s, %s)
-                            RETURNING ticket_id, title, status, priority, created_by, created_at
+                            INSERT INTO public.tickets
+                                (title, description, status, priority, created_by)
+                            VALUES (%s, %s, %s, %s, %s)
+                            RETURNING ticket_id, title, description, status, priority, created_by, created_at
                             """,
-                            (title, status, priority, created_by),
+                            (title, description, status, priority, created_by),
                         )
                         return Ticket(**cursor.fetchone())
         except psycopg2.Error as error:
@@ -185,7 +195,7 @@ class TicketRepository:
                             UPDATE public.tickets
                             SET status = %s, priority = %s
                             WHERE ticket_id = %s
-                            RETURNING ticket_id, title, status, priority, created_by, created_at
+                            RETURNING ticket_id, title, description, status, priority, created_by, created_at
                             """,
                             (status, priority, ticket_id),
                         )

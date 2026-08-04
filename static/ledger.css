@@ -178,6 +178,11 @@ table.ledger tr.open-row > td { border-bottom: none; }
 }
 
 .quiet { color: var(--ink-soft); }
+.grievance {
+  white-space: pre-wrap; line-height: 1.62; margin: 0 0 20px;
+  background: var(--parchment); border-left: 3px solid var(--rule-strong);
+  padding: 13px 16px;
+}
 .oath { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 15px; }
 .oath label { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); margin: 0; }
 .oath input { accent-color: var(--rubric); }
@@ -282,6 +287,9 @@ dialog.scriptorium .dismiss {
 }
 dialog.scriptorium .dismiss:hover { background: transparent; color: var(--gilt); }
 dialog.scriptorium .body { padding: 20px; }
+/* The grievance is the substance of a petition, so give it room to be written
+   in rather than a single-line slot. */
+dialog.scriptorium textarea { min-height: 190px; line-height: 1.6; }
 dialog.scriptorium .grid { display: flex; gap: 16px; flex-wrap: wrap; }
 dialog.scriptorium .grid .field { flex: 1 1 220px; min-width: 0; }
 dialog.scriptorium .foot {
